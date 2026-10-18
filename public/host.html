@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Host Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1.25rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background-color: #4f46e5;
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background-color: #4338ca;
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background-color: #e5e7eb;
+            color: #374151;
+        }
+
+        .btn-secondary:hover {
+            background-color: #d1d5db;
+        }
+
+        .pin-box {
+            background-color: white;
+            padding: 1rem 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .answer-choice {
+            background-color: #f3f4f6;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .player-status {
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .status-active {
+            background-color: #dbeafe;
+            color: #1e40af;
+        }
+
+        .status-completed {
+            background-color: #dcfce7;
+            color: #166534;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-900 text-white min-h-screen">
+
+    <div id="view-host-lobby" class="flex flex-col items-center justify-center min-h-screen p-8" hidden>
+        <h2 class="text-3xl font-light mb-4">Join the game with PIN:</h2>
+        <div class="pin-box mb-8">
+            <h1 id="lobby-pin" class="text-8xl font-extrabold text-gray-900 tracking-widest">000000</h1>
+        </div>
+
+        <div id="mode-indicator" class="mb-4 text-xl"></div>
+
+        <button id="start-game-btn" class="btn btn-primary btn-lg text-2xl px-12 py-4" disabled>
+            Start Game
+        </button>
+
+        <div class="mt-12 w-full max-w-2xl">
+            <h3 class="text-2xl font-bold text-center mb-4">Players Joined (<span id="player-count">0</span>)</h3>
+            <div id="lobby-player-list" class="flex flex-wrap justify-center gap-4">
+            </div>
+        </div>
+    </div>
+
+    <div id="view-host-game-sync" class="flex min-h-screen" hidden>
+        <div class="flex-grow flex flex-col p-8">
+            <div id="game-header" class="flex-shrink-0">
+                <h2 id="question-text" class="text-4xl font-bold text-center mb-8 min-h-[5rem]">Question text goes
+                    here...</h2>
+            </div>
+
+            <div id="game-timer" class="flex-shrink-0 text-6xl font-bold text-center mb-8">30</div>
+
+            <div id="game-answers" class="flex-grow grid grid-cols-2 gap-4">
+                <div class="answer-choice bg-red-500">Answer 1</div>
+                <div class="answer-choice bg-blue-500">Answer 2</div>
+                <div class="answer-choice bg-yellow-500">Answer 3</div>
+                <div class="answer-choice bg-green-500">Answer 4</div>
+            </div>
+
+            <div id="game-controls" class="flex-shrink-0 flex justify-center space-x-4 mt-8">
+                <button id="next-question-btn" class="btn btn-primary text-lg" hidden>Next Question</button>
+                <button id="show-leaderboard-btn" class="btn btn-secondary text-lg">End Round</button>
+                <button id="export-btn-sync" class="btn btn-secondary text-lg" hidden>Export Final Scores (CSV)
+                </button>
+            </div>
+        </div>
+
+        <div class="w-80 bg-gray-800 p-6 flex-shrink-0">
+            <h2 class="text-2xl font-bold mb-4">Leaderboard</h2>
+            <div id="leaderboard-sync" class="space-y-3"></div>
+        </div>
+    </div>
+
+    <div id="view-host-game-async" class="min-h-screen p-8" hidden>
+        <div class="max-w-6xl mx-auto">
+            <div class="flex justify-between items-center mb-8">
+                <div>
+                    <h1 class="text-4xl font-bold mb-2">Game Dashboard</h1>
+                    <p class="text-gray-300">PIN: <span id="async-pin" class="text-2xl font-bold">000000</span></p>
+                </div>
+                <button id="end-game-btn" class="btn btn-secondary">End Game</button>
+                <button id="export-btn-async" class="btn btn-secondary ml-4" hidden>Export Results</button>
+            </div>
+
+            <div class="grid grid-cols-4 gap-4 mb-8">
+                <div class="card p-6 bg-gray-800">
+                    <p class="text-gray-400 text-sm mb-1">Total Players</p>
+                    <p id="stat-total-players" class="text-3xl font-bold">0</p>
+                </div>
+                <div class="card p-6 bg-gray-800">
+                    <p class="text-gray-400 text-sm mb-1">Active</p>
+                    <p id="stat-active-players" class="text-3xl font-bold text-blue-400">0</p>
+                </div>
+                <div class="card p-6 bg-gray-800">
+                    <p class="text-gray-400 text-sm mb-1">Completed</p>
+                    <p id="stat-completed-players" class="text-3xl font-bold text-green-400">0</p>
+                </div>
+                <div class="card p-6 bg-gray-800">
+                    <p class="text-gray-400 text-sm mb-1">Avg Progress</p>
+                    <p id="stat-avg-progress" class="text-3xl font-bold text-yellow-400">0%</p>
+                </div>
+            </div>
+
+            <div id="time-remaining-card" class="card p-6 bg-gray-800 mb-8 text-center" hidden>
+                <p class="text-gray-400 text-sm mb-2">Time Remaining</p>
+                <p id="time-remaining" class="text-5xl font-bold text-red-400">--:--</p>
+            </div>
+
+            <div class="card p-6 bg-gray-800">
+                <h2 class="text-2xl font-bold mb-4">Player Progress</h2>
+                <div id="async-player-list" class="space-y-3">
+                    <p class="text-gray-400">Waiting for players...</p>
+                </div>
+            </div>
+
+            <div class="card p-6 bg-gray-800 mt-8">
+                <h2 class="text-2xl font-bold mb-4">Final Leaderboard</h2>
+                <div id="leaderboard-async" class="space-y-3">
+                    <p class="text-gray-400">Results will appear as players complete the quiz</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, doc, getDoc, collection, onSnapshot, updateDoc, deleteDoc, getDocs, query, orderBy, serverTimestamp, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBcNOCX6svBS7ONFHXeR0gHx-SHNCzG2Mg",
+            authDomain: "quizzel0.firebaseapp.com",
+            projectId: "quizzel0",
+            storageBucket: "quizzel0.firebasestorage.app",
+            messagingSenderId: "568971743868",
+            appId: "1:568971743868:web:adfb64f8178a2dc9316ff9",
+            measurementId: "G-T098LL4GPC"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let currentUserId = null;
+        let currentGameId = null;
+        let quizData = null;
+        let gameData = null; // This will be the single source of truth, updated by listener
+
+        let playerListenerUnsub = null;
+        let hostGameListenerUnsub = null;
+        let gameTimerInterval = null;
+        let asyncTimerInterval = null;
+
+        const hostLobbyView = document.getElementById('view-host-lobby');
+        const hostGameViewSync = document.getElementById('view-host-game-sync');
+        const hostGameViewAsync = document.getElementById('view-host-game-async');
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                currentUserId = user.uid;
+                const urlParams = new URLSearchParams(window.location.search);
+                const pin = urlParams.get('pin');
+
+                if (pin) {
+                    currentGameId = pin;
+                    loadHostGame(pin);
+                } else {
+                    alert("No game PIN specified.");
+                    window.location.href = './admin.html';
+                }
+            } else {
+                signInAnonymously(auth).catch(err => console.error("Host sign-in failed", err));
+            }
+        });
+
+        async function loadHostGame(pin) {
+            try {
+                const gameRef = doc(db, 'games', pin);
+                const gameSnap = await getDoc(gameRef);
+
+                if (!gameSnap.exists()) {
+                    alert('Game not found.');
+                    window.location.href = './admin.html';
+                    return;
+                }
+                gameData = gameSnap.data();
+                const gameMode = gameData.mode || 'sync'; // Use a local const just for setup
+
+                const quizSnap = await getDoc(doc(db, 'quizzes', gameData.quizId));
+                if (!quizSnap.exists()) {
+                    alert('Quiz data not found.');
+                    window.location.href = './admin.html';
+                    return;
+                }
+                quizData = quizSnap.data();
+
+                document.getElementById('lobby-pin').textContent = pin;
+
+                const modeText = gameMode === 'async' ? 'Self-Paced Mode' : 'Live Mode';
+                document.getElementById('mode-indicator').textContent = modeText;
+
+                // We will let the listener (startGameListener) decide which view to show
+                // hostLobbyView.removeAttribute('hidden');
+
+                document.getElementById('lobby-player-list').innerHTML = '<p class="text-gray-400">Waiting for players to join...</p>';
+
+                startPlayerListener(pin, gameMode); // Pass mode to player listener
+                startGameListener(pin); // This will now control all view logic
+
+                document.getElementById('start-game-btn').disabled = false;
+
+            } catch (error) {
+                console.error("Error loading host game: ", error);
+                alert("Could not load game.");
+            }
+        }
+
+        function startPlayerListener(pin, gameMode) { // Pass gameMode
+            const playerList = document.getElementById('lobby-player-list');
+            const playerCount = document.getElementById('player-count');
+
+            const leaderboardSync = document.getElementById('leaderboard-sync');
+            const leaderboardAsync = document.getElementById('leaderboard-async');
+
+            const q = query(collection(db, 'games', pin, 'players'), orderBy('score', 'desc'));
+
+            playerListenerUnsub = onSnapshot(q, (snapshot) => {
+                console.log("=== PLAYER SNAPSHOT UPDATE ===");
+                console.log("Player count:", snapshot.size);
+                console.log("Snapshot empty:", snapshot.empty);
+                console.log("Lobby view hidden:", hostLobbyView.hasAttribute('hidden'));
+
+                playerCount.textContent = snapshot.size;
+
+                if (snapshot.empty) {
+                    playerList.innerHTML = '<p class="text-gray-400">Waiting for players to join...</p>';
+                    if (leaderboardSync) leaderboardSync.innerHTML = '<p class="text-gray-400">Waiting for players...</p>';
+                    if (leaderboardAsync) leaderboardAsync.innerHTML = '<p class="text-gray-400">Results will appear as players complete the quiz</p>';
+                    return;
+                }
+
+                // Always render players in lobby (remove the hidden check that was blocking this)
+                console.log("Rendering", snapshot.size, "players");
+                playerList.innerHTML = '';
+                snapshot.forEach(playerDoc => {
+                    const player = playerDoc.data();
+                    console.log("Rendering player:", player.name);
+
+                    const playerContainer = document.createElement('div');
+                    playerContainer.className = 'flex items-center bg-white text-gray-800 px-4 py-2 rounded-full gap-2 transition-all hover:bg-gray-100';
+
+                    const nameSpan = document.createElement('span');
+                    nameSpan.className = 'text-lg font-bold';
+                    nameSpan.textContent = player.name;
+
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'text-red-500 hover:text-red-700 font-bold ml-2 p-1 rounded hover:bg-red-100 transition-colors';
+                    removeBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>';
+                    removeBtn.title = 'Remove Player';
+                    removeBtn.onclick = () => removePlayer(playerDoc.id, player.name);
+
+                    playerContainer.appendChild(nameSpan);
+                    playerContainer.appendChild(removeBtn);
+                    playerList.appendChild(playerContainer);
+                });
+
+
+                // Sync mode leaderboard
+                if (gameMode === 'sync' && leaderboardSync) {
+                    leaderboardSync.innerHTML = '';
+                    let rank = 1;
+                    snapshot.forEach(doc => {
+                        const player = doc.data();
+                        const leaderItem = document.createElement('div');
+                        leaderItem.className = 'flex justify-between items-center bg-gray-700 p-3 rounded';
+                        leaderItem.innerHTML = `
+                            <span class="font-bold text-lg">${rank}. ${player.name}</span>
+                            <span class="text-lg">${player.score}</span>
+                        `;
+                        leaderboardSync.appendChild(leaderItem);
+                        rank++;
+                    });
+                }
+
+                // Async mode displays
+                if (gameMode === 'async') {
+                    updateAsyncDashboard(snapshot);
+                }
+            });
+        }
+
+        // NEW: Update async dashboard with player progress
+        function updateAsyncDashboard(snapshot) {
+            const asyncPlayerList = document.getElementById('async-player-list');
+            const leaderboardAsync = document.getElementById('leaderboard-async');
+
+            let totalPlayers = 0;
+            let activePlayers = 0;
+            let completedPlayers = 0;
+            let totalProgress = 0;
+
+            asyncPlayerList.innerHTML = '';
+            leaderboardAsync.innerHTML = '';
+
+            const completedPlayersList = [];
+
+            snapshot.forEach(doc => {
+                const player = doc.data();
+                totalPlayers++;
+
+                const currentQ = player.currentQuestion || 0;
+                const totalQ = quizData.questions.length;
+                const progress = Math.floor((currentQ / totalQ) * 100);
+                totalProgress += progress;
+
+                if (player.status === 'completed') {
+                    completedPlayers++;
+                    completedPlayersList.push({
+                        name: player.name,
+                        score: player.score,
+                        completedAt: player.completedAt
+                    });
+                } else {
+                    activePlayers++;
+                }
+
+                // Player progress card
+                const progressCard = document.createElement('div');
+                progressCard.className = 'bg-gray-700 p-4 rounded-lg';
+                progressCard.innerHTML = `
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="font-bold text-lg">${player.name}</span>
+                        <span class="player-status ${player.status === 'completed' ? 'status-completed' : 'status-active'}">
+                            ${player.status === 'completed' ? 'COMPLETED' : 'ACTIVE'}
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="flex-grow bg-gray-600 rounded-full h-3">
+                            <div class="bg-blue-500 h-3 rounded-full" style="width: ${progress}%"></div>
+                        </div>
+                        <span class="text-sm font-medium">${currentQ}/${totalQ}</span>
+                    </div>
+                    <div class="mt-2 text-sm text-gray-400">Score: ${player.score}</div>
+                `;
+                asyncPlayerList.appendChild(progressCard);
+            });
+
+            // Update stats
+            document.getElementById('stat-total-players').textContent = totalPlayers;
+            document.getElementById('stat-active-players').textContent = activePlayers;
+            document.getElementById('stat-completed-players').textContent = completedPlayers;
+            document.getElementById('stat-avg-progress').textContent =
+                totalPlayers > 0 ? Math.floor(totalProgress / totalPlayers) + '%' : '0%';
+
+            // Show completed players in leaderboard
+            if (completedPlayersList.length > 0) {
+                completedPlayersList.sort((a, b) => b.score - a.score);
+                completedPlayersList.forEach((player, index) => {
+                    const leaderItem = document.createElement('div');
+                    leaderItem.className = 'flex justify-between items-center bg-gray-700 p-3 rounded';
+                    leaderItem.innerHTML = `
+                        <span class="font-bold text-lg">${index + 1}. ${player.name}</span>
+                        <span class="text-lg">${player.score}</span>
+                    `;
+                    leaderboardAsync.appendChild(leaderItem);
+                });
+            } else {
+                leaderboardAsync.innerHTML = '<p class="text-gray-400">Results will appear as players complete the quiz</p>';
+            }
+        }
+
+        // NEW: Remove player function
+        async function removePlayer(playerId, playerName) {
+            console.log(`Attempting to remove player: ${playerName} (${playerId})`);
+            console.log(`Current Game ID: ${currentGameId}`);
+
+            if (confirm(`Are you sure you want to remove ${playerName} from the game?`)) {
+                try {
+                    console.log("User confirmed removal. Deleting doc...");
+                    const playerRef = doc(db, 'games', currentGameId, 'players', playerId);
+                    console.log("Doc Ref path:", playerRef.path);
+
+                    await deleteDoc(playerRef);
+                    console.log("Delete operation completed successfully.");
+                    alert(`Success! Removed ${playerName}.`);
+
+                    // The onSnapshot listener will automatically update the UI
+                } catch (error) {
+                    console.error("Error removing player: ", error);
+                    alert(`Failed to remove player: ${error.message}\nDebug: User ${currentUserId} vs Owner ${gameData.ownerId}`);
+                }
+            } else {
+                console.log("User cancelled removal.");
+            }
+        }
+
+        /**
+         * Triggers a browser download for a CSV file.
+         */
+        function downloadCSV(csvContent, fileName) {
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', fileName);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        /**
+         * Fetches all player data and formats it for CSV export.
+         */
+        async function exportAsyncResults() {
+            if (gameData.mode !== 'async') {
+                alert('Export is currently only available for Async games.');
+                return;
+            }
+            if (!quizData || !gameData) {
+                alert('Data not loaded yet.');
+                return;
+            }
+
+            try {
+                console.log('Fetching player data for export...');
+                // Get all players, ordered by score for a clean report
+                const playersSnapshot = await getDocs(query(collection(db, 'games', currentGameId, 'players'), orderBy('score', 'desc')));
+
+                let csvContent = "";
+                const numQuestions = quizData.questions.length;
+
+                // 1. Create Header Row
+                // These are the columns for your CSV file
+                const headers = ["Rank", "Player Name", "Email", "Contact", "School", "Score", "Status", "Completion Time"];
+                for (let i = 0; i < numQuestions; i++) {
+                    headers.push(`Q${i + 1} Answer (0-3)`);
+                    headers.push(`Q${i + 1} Correct?`);
+                    headers.push(`Q${i + 1} Time (s)`);
+                }
+                csvContent += headers.join(',') + '\r\n';
+
+                // 2. Create a Row for Each Player
+                let rank = 1;
+                for (const doc of playersSnapshot.docs) {
+                    const player = doc.data();
+                    const answers = player.answers || []; // Get the player's inputs
+
+                    let row = [];
+                    row.push(rank++);
+                    row.push(`"${player.name}"`); // Quotes handle commas in names
+                    row.push(`"${player.email || 'N/A'}"`); // Email (N/A for old data)
+                    row.push(`"${player.contact || 'N/A'}"`); // Contact (N/A for old data)
+                    row.push(`"${player.school || 'N/A'}"`); // School (N/A for old data)
+                    row.push(player.score);
+                    row.push(player.status || 'active');
+
+                    // Add the timestamp
+                    const timestamp = player.completedAt ? player.completedAt.toDate().toLocaleString() : 'Not Finished';
+                    row.push(`"${timestamp}"`);
+
+                    // Add each question input
+                    for (let i = 0; i < numQuestions; i++) {
+                        const answer = answers.find(a => a.questionIndex === i);
+                        if (answer) {
+                            row.push(answer.answerIndex);  // The input (e.g., 0, 1, 2, or 3)
+                            row.push(answer.isCorrect);   // The result (true/false)
+                            row.push(answer.timeSpent);   // The time
+                        } else {
+                            row.push("N/A", "N/A", "N/A"); // Player didn't answer this
+                        }
+                    }
+                    csvContent += row.join(',') + '\r\n';
+                }
+
+                // 3. Trigger Download
+                const fileName = `quiz-results-${currentGameId}.csv`;
+                downloadCSV(csvContent, fileName);
+
+            } catch (error) {
+                console.error("Export failed:", error);
+                alert("An error occurred during export. See console for details.");
+            }
+        }
+
+        async function exportSyncResults() {
+            console.log('Fetching player data for sync export...');
+
+            try {
+                // Get all players, ordered by score
+                const playersSnapshot = await getDocs(query(collection(db, 'games', currentGameId, 'players'), orderBy('score', 'desc')));
+
+                let csvContent = "";
+
+                // 1. Create Header Row
+                const headers = ["Rank", "Player Name", "Email", "Contact", "School", "Score"];
+                csvContent += headers.join(',') + '\r\n';
+
+                // 2. Create a Row for Each Player
+                let rank = 1;
+                for (const doc of playersSnapshot.docs) {
+                    const player = doc.data();
+
+                    let row = [];
+                    row.push(rank++);
+                    row.push(`"${player.name}"`); // Quotes handle commas in names
+                    row.push(`"${player.email || 'N/A'}"`); // Email (N/A for old data)
+                    row.push(`"${player.contact || 'N/A'}"`); // Contact (N/A for old data)
+                    row.push(`"${player.school || 'N/A'}"`); // School (N/A for old data)
+                    row.push(player.score);
+
+                    csvContent += row.join(',') + '\r\n';
+                }
+
+                // 3. Trigger Download (uses the existing downloadCSV function)
+                const fileName = `quiz-scores-sync-${currentGameId}.csv`;
+                downloadCSV(csvContent, fileName);
+
+            } catch (error) {
+                console.error("Export failed:", error);
+                alert("An error occurred during export. See console for details.");
+            }
+        }
+
+
+        function startGameListener(pin) {
+            hostGameListenerUnsub = onSnapshot(doc(db, 'games', pin), (doc) => {
+                gameData = doc.data(); // This updates the global gameData
+                if (!gameData) {
+                    stopHostGame(false);
+                    return;
+                }
+
+                // FIX: Read mode directly from the live data, not a stale variable
+                const currentMode = gameData.mode || 'sync';
+
+                if (currentMode === 'sync') {
+                    handleSyncGameState();
+                } else {
+                    handleAsyncGameState();
+                }
+            });
+        }
+
+        // SYNC MODE: Original logic
+        function handleSyncGameState() {
+            // Ensure async view is hidden
+            hostGameViewAsync.setAttribute('hidden', true);
+
+            switch (gameData.state) {
+                case 'lobby':
+                    hostLobbyView.removeAttribute('hidden');
+                    hostGameViewSync.setAttribute('hidden', true);
+                    break;
+                case 'question':
+                    hostLobbyView.setAttribute('hidden', true);
+                    hostGameViewSync.removeAttribute('hidden');
+                    showNextQuestion();
+                    break;
+
+                case 'leaderboard':
+                    hostLobbyView.setAttribute('hidden', true);
+                    hostGameViewSync.removeAttribute('hidden');
+                    if (gameTimerInterval) clearInterval(gameTimerInterval);
+                    document.getElementById('game-timer').textContent = 'Time\'s Up!';
+                    document.getElementById('show-leaderboard-btn').setAttribute('hidden', true);
+                    document.getElementById('next-question-btn').removeAttribute('hidden');
+
+                    if (gameData.currentQuestion + 1 >= quizData.questions.length) {
+                        document.getElementById('next-question-btn').textContent = 'Finish Game';
+                    }
+                    break;
+
+                case 'finished':
+                    hostLobbyView.setAttribute('hidden', true);
+                    hostGameViewSync.removeAttribute('hidden');
+                    if (gameTimerInterval) clearInterval(gameTimerInterval);
+                    document.getElementById('game-timer').textContent = 'Time\'s Up!';
+                    document.getElementById('show-leaderboard-btn').setAttribute('hidden', true);
+                    document.getElementById('next-question-btn').removeAttribute('hidden', true);
+                    document.getElementById('export-btn-sync').removeAttribute('hidden');
+                    if (gameData.currentQuestion + 1 >= quizData.questions.length) {
+                        document.getElementById('next-question-btn').textContent = 'Finish Game';
+                    }
+                    break;
+            }
+        }
+
+        // NEW: ASYNC MODE logic
+        function handleAsyncGameState() {
+            // CRITICAL FIX: Hide sync view to prevent unnecessary page in async mode
+            hostGameViewSync.setAttribute('hidden', true);
+
+            if (gameData.state === 'active') {
+                hostLobbyView.setAttribute('hidden', true);
+                hostGameViewAsync.removeAttribute('hidden');
+
+                document.getElementById('async-pin').textContent = currentGameId;
+
+                // Start time limit countdown if exists
+                if (gameData.timeLimit && gameData.startTime && !asyncTimerInterval) {
+                    startAsyncTimer(gameData.startTime.toDate(), gameData.timeLimit);
+                }
+            } else if (gameData.state === 'finished') {
+                if (asyncTimerInterval) clearInterval(asyncTimerInterval);
+                document.getElementById('end-game-btn').textContent = 'Back to Admin';
+                document.getElementById('export-btn-async').removeAttribute('hidden');
+
+                // Ensure async view is visible to show final stats
+                hostLobbyView.setAttribute('hidden', true);
+                hostGameViewAsync.removeAttribute('hidden');
+
+            } else if (gameData.state === 'lobby') { // <--- FIX: Added this case
+                hostLobbyView.removeAttribute('hidden');
+                hostGameViewAsync.setAttribute('hidden', true);
+            }
+        }
+
+        // NEW: Async timer for time-limited quizzes
+        function startAsyncTimer(startTime, duration) {
+            const timeCard = document.getElementById('time-remaining-card');
+            const timeDisplay = document.getElementById('time-remaining');
+            timeCard.removeAttribute('hidden');
+
+            const endTime = startTime.getTime() + duration * 1000;
+
+            asyncTimerInterval = setInterval(() => {
+                const now = new Date().getTime();
+                const timeLeft = Math.floor((endTime - now) / 1000);
+
+                if (timeLeft <= 0) {
+                    clearInterval(asyncTimerInterval);
+                    timeDisplay.textContent = 'EXPIRED';
+                    autoEndAsyncGame();
+                } else {
+                    const minutes = Math.floor(timeLeft / 60);
+                    const seconds = timeLeft % 60;
+                    timeDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                }
+            }, 1000);
+        }
+
+        // NEW: Auto-end game when time expires
+        async function autoEndAsyncGame() {
+            await updateDoc(doc(db, 'games', currentGameId), {
+                state: 'finished',
+                endedAt: serverTimestamp()
+            });
+            alert('Time limit reached! Game has ended.');
+        }
+
+        // --- THIS IS THE SECOND FIX ---
+        document.getElementById('start-game-btn').addEventListener('click', async () => {
+
+            alert('GAME HAS STARTED!');
+
+            // FIX: Read mode from the live 'gameData' object, not a stale variable
+            const currentMode = gameData.mode || 'sync';
+
+            if (currentMode === 'sync') {
+                const firstQuestion = quizData.questions[0];
+                await updateDoc(doc(db, 'games', currentGameId), {
+                    state: 'question',
+                    currentQuestion: 0,
+                    questionStartTime: serverTimestamp(),
+                    currentQuestionData: firstQuestion
+                });
+            } else {
+                // Async mode:
+                const updateData = { state: 'active' };
+
+                // Only set startTime if a timeLimit exists for this game
+                if (gameData.timeLimit) {
+                    updateData.startTime = serverTimestamp();
+                }
+
+                await updateDoc(doc(db, 'games', currentGameId), updateData);
+            }
+        });
+
+        // SYNC MODE: Show leaderboard
+        document.getElementById('show-leaderboard-btn').addEventListener('click', async () => {
+            if (gameTimerInterval) clearInterval(gameTimerInterval);
+            await calculateScores();
+            await updateDoc(doc(db, 'games', currentGameId), { state: 'leaderboard' });
+        });
+
+        // SYNC MODE: Next question
+        document.getElementById('next-question-btn').addEventListener('click', async () => {
+            const nextQuestionIndex = gameData.currentQuestion + 1;
+
+            if (nextQuestionIndex >= quizData.questions.length) {
+                await updateDoc(doc(db, 'games', currentGameId), { state: 'finished' });
+                alert("Game Over! Final scores are on the leaderboard.");
+            } else {
+                const nextQuestion = quizData.questions[nextQuestionIndex];
+                await updateDoc(doc(db, 'games', currentGameId), {
+                    state: 'question',
+                    currentQuestion: nextQuestionIndex,
+                    questionStartTime: serverTimestamp(),
+                    currentQuestionData: nextQuestion
+                });
+            }
+        });
+
+        // NEW: End async game button
+        document.getElementById('end-game-btn').addEventListener('click', async () => {
+            if (gameData.state === 'finished') {
+                stopHostGame(true);
+            } else {
+                if (confirm('Are you sure you want to end this game? Players will no longer be able to submit answers.')) {
+                    await updateDoc(doc(db, 'games', currentGameId), {
+                        state: 'finished',
+                        endedAt: serverTimestamp()
+                    });
+                    alert('Game ended.');
+                }
+            }
+        });
+
+        function showNextQuestion() {
+            const qIndex = gameData.currentQuestion;
+            const question = quizData.questions[qIndex];
+
+            // Display question with image if present
+            let questionHTML = '';
+            if (question.imageUrl) {
+                questionHTML = `<img src="${question.imageUrl}" class="max-w-md h-auto rounded-lg mb-4 mx-auto" style="max-height: 250px;" onerror="this.style.display='none'" alt="Question image"><br>`;
+            }
+            questionHTML += question.text;
+            document.getElementById('question-text').innerHTML = questionHTML;
+
+            const answerEls = document.querySelectorAll('#game-answers .answer-choice');
+            answerEls.forEach((el, index) => {
+                el.textContent = question.answers[index];
+            });
+
+            document.getElementById('show-leaderboard-btn').removeAttribute('hidden');
+            document.getElementById('next-question-btn').setAttribute('hidden', true);
+
+            const duration = question.time || 30;
+            const timerEl = document.getElementById('game-timer');
+            timerEl.textContent = duration;
+
+            startHostTimer(duration);
+        }
+
+        function startHostTimer(duration) {
+            let timeLeft = duration;
+            const timerEl = document.getElementById('game-timer');
+            timerEl.textContent = timeLeft;
+
+            if (gameTimerInterval) clearInterval(gameTimerInterval);
+
+            gameTimerInterval = setInterval(() => {
+                timeLeft--;
+                timerEl.textContent = timeLeft;
+                if (timeLeft <= 0) {
+                    clearInterval(gameTimerInterval);
+                    timerEl.textContent = 'Time\'s Up!';
+                    document.getElementById('show-leaderboard-btn').click();
+                }
+            }, 1000);
+        }
+
+        async function calculateScores() {
+            const qIndex = gameData.currentQuestion;
+            const question = quizData.questions[qIndex];
+            const correctIndex = parseInt(question.correct, 10);
+            const maxTime = question.time || 30; // Default to 30 seconds if not set
+
+            const playersQuery = collection(db, 'games', currentGameId, 'players');
+            const playerSnapshots = await getDocs(playersQuery);
+
+            const batch = writeBatch(db);
+
+            playerSnapshots.forEach(playerDoc => {
+                const player = playerDoc.data();
+                const lastAnswer = player.lastAnswer;
+
+                if (lastAnswer && lastAnswer.questionIndex === qIndex) {
+                    if (lastAnswer.answerIndex === correctIndex) {
+                        const timeSpent = lastAnswer.timestamp ? Math.floor((lastAnswer.timestamp.toDate() - gameData.questionStartTime.toDate()) / 1000) : maxTime;
+                        // Apply async-style scoring: 500 base + time bonus (20 points per second saved)
+                        const timeBonus = Math.max(0, maxTime - timeSpent) * 20;
+                        const scoreIncrement = 500 + timeBonus;
+                        const score = player.score + scoreIncrement;
+                        batch.update(playerDoc.ref, { score: score });
+                    }
+                }
+            });
+
+            await batch.commit();
+        }
+
+        async function stopHostGame(deleteGame = true) {
+            if (playerListenerUnsub) playerListenerUnsub();
+            if (hostGameListenerUnsub) hostGameListenerUnsub();
+            if (gameTimerInterval) clearInterval(gameTimerInterval);
+            if (asyncTimerInterval) clearInterval(asyncTimerInterval);
+
+            if (deleteGame && currentGameId) {
+                const playersQuery = collection(db, 'games', currentGameId, 'players');
+                const playerSnapshots = await getDocs(playersQuery);
+                const deleteBatch = writeBatch(db);
+                playerSnapshots.forEach(doc => deleteBatch.delete(doc.ref));
+                await deleteBatch.commit();
+
+                await deleteDoc(doc(db, 'games', currentGameId));
+            }
+
+            window.location.href = './admin.html';
+        }
+        document.getElementById('export-btn-async').addEventListener('click', exportAsyncResults);
+        document.getElementById('export-btn-sync').addEventListener('click', exportSyncResults);
+    </script>
+</body>
+
+</html>

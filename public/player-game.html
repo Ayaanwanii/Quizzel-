@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .player-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            min-height: 120px;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: white;
+            font-size: 1.25rem;
+            font-weight: 700;
+            padding: 1rem;
+            text-align: center;
+            border: 4px solid transparent;
+        }
+
+        .player-btn:hover:not(:disabled) {
+            transform: scale(1.03);
+        }
+
+        .player-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .bg-red-500 {
+            background-color: #ef4444;
+        }
+
+        .bg-blue-500 {
+            background-color: #3b82f6;
+        }
+
+        .bg-yellow-500 {
+            background-color: #eab308;
+        }
+
+        .bg-green-500 {
+            background-color: #22c55e;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100">
+
+    <div id="alert-box" class="fixed top-5 left-1/2 -translate-x-1/2 p-4 rounded-lg text-white font-bold z-50" hidden>
+        This is an alert
+    </div>
+
+    <!-- Player Game View -->
+    <div id="view-player-active-game" class="flex flex-col md:flex-row min-h-screen">
+
+        <div class="flex-grow flex flex-col justify-between bg-gray-900 p-4 md:p-8">
+
+            <!-- Top: Timer and Question Text -->
+            <div>
+                <!-- Progress indicator for async mode -->
+                <div id="progress-container" class="mb-4" hidden>
+                    <div class="flex justify-between text-white text-sm mb-2">
+                        <span>Question <span id="current-q-num">1</span> of <span id="total-q-num">10</span></span>
+                        <span id="overall-timer">Time: --:--</span>
+                    </div>
+                    <div class="w-full bg-gray-700 rounded-full h-2">
+                        <div id="progress-bar" class="bg-blue-500 h-2 rounded-full transition-all" style="width: 0%">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex-shrink-0 pt-4 pb-2 text-center">
+                    <span id="player-timer" class="text-5xl font-bold text-white">--</span>
+                </div>
+                <div class="flex-shrink-0 pt-4 pb-4">
+                    <h1 id="player-question-text" class="text-2xl font-bold text-center text-white min-h-[3rem]">Waiting
+                        for host...</h1>
+                </div>
+            </div>
+
+            <!-- Middle: Answer Buttons -->
+            <div id="answer-grid" class="flex-grow grid grid-cols-2 gap-4">
+                <button id="player-answer-0" class="player-btn bg-red-500" disabled></button>
+                <button id="player-answer-1" class="player-btn bg-blue-500" disabled></button>
+                <button id="player-answer-2" class="player-btn bg-yellow-500" disabled></button>
+                <button id="player-answer-3" class="player-btn bg-green-500" disabled></button>
+            </div>
+
+            <!-- Bottom: Status Footer -->
+            <div class="flex-shrink-0 text-white text-center py-8">
+                <h2 id="player-status-text" class="text-3xl font-bold">Connecting...</h2>
+                <p class="text-xl">Your score: <span id="player-score">0</span></p>
+
+                <!-- Next button for async mode -->
+                <button id="next-question-player-btn"
+                    class="mt-4 px-6 py-3 bg-blue-500 hover:bg-blue-600 rounded-lg font-bold text-lg" hidden>
+                    Next Question →
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, updateDoc, serverTimestamp, collection, query, orderBy, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBcNOCX6svBS7ONFHXeR0gHx-SHNCzG2Mg",
+            authDomain: "quizzel0.firebaseapp.com",
+            projectId: "quizzel0",
+            storageBucket: "quizzel0.firebasestorage.app",
+            messagingSenderId: "568971743868",
+            appId: "1:568971743868:web:adfb64f8178a2dc9316ff9",
+            measurementId: "G-T098LL4GPC"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let currentGameId = null;
+        let currentPlayerId = null;
+        let gameMode = null;
+        let quizData = null;
+
+        let playerGameUnsub = null;
+        let playerScoreUnsub = null;
+
+        let playerTimerInterval = null;
+        let overallTimerInterval = null;
+        let playerLastAnswer = null;
+        let currentHostGameData = null;
+
+        // ASYNC MODE STATE
+        let currentQuestionIndex = 0;
+        let questionStartTime = null;
+        let gameStartTime = null;
+        let isProcessingAnswer = false; // CRITICAL FIX: Prevent multiple submissions
+
+        const playerStatusText = document.getElementById('player-status-text');
+        const playerButtons = document.querySelectorAll('#view-player-active-game .player-btn');
+        const timerEl = document.getElementById('player-timer');
+        const questionTextEl = document.getElementById('player-question-text');
+
+        window.addEventListener('load', () => {
+            currentGameId = sessionStorage.getItem('quizGamePin');
+            currentPlayerId = sessionStorage.getItem('quizPlayerId');
+
+            if (!currentGameId || !currentPlayerId) {
+                alert('No game session found. Redirecting to join page.');
+                window.location.href = './player-join.html';
+                return;
+            }
+
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    initializeGame();
+                } else {
+                    signInAnonymously(auth).catch(err => {
+                        console.error(err);
+                        showAlert('Could not connect to game services.');
+                    });
+                }
+            });
+        });
+
+        async function initializeGame() {
+            try {
+                const gameSnap = await getDoc(doc(db, 'games', currentGameId));
+                if (!gameSnap.exists()) {
+                    showAlert('Game not found.');
+                    return;
+                }
+
+                const gameData = gameSnap.data();
+                gameMode = gameData.mode || 'sync';
+
+                if (gameMode === 'async') {
+                    const quizSnap = await getDoc(doc(db, 'quizzes', gameData.quizId));
+                    if (quizSnap.exists()) {
+                        quizData = quizSnap.data();
+                        setupAsyncMode(gameData);
+                    }
+                } else {
+                    startPlayerListeners(currentGameId, currentPlayerId);
+                }
+
+            } catch (error) {
+                console.error("Error initializing game:", error);
+                showAlert('Error loading game.');
+            }
+        }
+
+        // ASYNC MODE SETUP
+        function setupAsyncMode(gameData) {
+            document.getElementById('progress-container').removeAttribute('hidden');
+            document.getElementById('total-q-num').textContent = quizData.questions.length;
+
+            if (gameData.timeLimit && gameData.startTime) {
+                gameStartTime = gameData.startTime.toDate();
+                startOverallTimer(gameStartTime, gameData.timeLimit);
+            }
+
+            // FIXED: Listen to player document for score updates ONLY
+            playerScoreUnsub = onSnapshot(doc(db, 'games', currentGameId, 'players', currentPlayerId), (doc) => {
+                // Handle player removal
+                if (!doc.exists()) {
+                    showAlert("You have been removed from the game.", false);
+                    stopPlayerGame();
+                    return;
+                }
+
+                const playerData = doc.data();
+                if (playerData) {
+                    // Update score display
+                    document.getElementById('player-score').textContent = playerData.score;
+
+                    // CRITICAL FIX: Only load question if we're not processing an answer
+                    if (!isProcessingAnswer) {
+                        const serverQuestionIndex = playerData.currentQuestion || 0;
+
+                        // Check if player completed
+                        if (playerData.status === 'completed') {
+                            showCompletionScreen();
+                        } else if (serverQuestionIndex !== currentQuestionIndex) {
+                            // Server has different question index, sync it
+                            currentQuestionIndex = serverQuestionIndex;
+                            loadAsyncQuestion(currentQuestionIndex);
+                        } else if (currentQuestionIndex === 0 && !questionStartTime) {
+                            // Initial load
+                            loadAsyncQuestion(0);
+                        }
+                    }
+                }
+            });
+
+            // Listen for game end
+            playerGameUnsub = onSnapshot(doc(db, 'games', currentGameId), (doc) => {
+                const gameData = doc.data();
+                if (gameData && gameData.state === 'finished') {
+                    showAlert('Game has ended!', false);
+                    setTimeout(() => stopPlayerGame(), 3000);
+                }
+            });
+        }
+
+        // LOAD QUESTION (ASYNC MODE)
+        function loadAsyncQuestion(qIndex) {
+            console.log('Loading question:', qIndex); // Debug
+
+            if (qIndex >= quizData.questions.length) {
+                completeAsyncQuiz();
+                return;
+            }
+
+            const question = quizData.questions[qIndex];
+
+            // Update UI
+            document.getElementById('current-q-num').textContent = qIndex + 1;
+
+            // Display question image if present
+            let questionHTML = '';
+            if (question.imageUrl) {
+                questionHTML = `<img src="${question.imageUrl}" class="max-w-full h-auto rounded-lg mb-3 mx-auto" style="max-height: 200px;" onerror="this.style.display='none'" alt="Question image"><br>`;
+            }
+            questionHTML += question.text;
+            questionTextEl.innerHTML = questionHTML;
+
+            // Update progress bar
+            const progress = ((qIndex) / quizData.questions.length) * 100;
+            document.getElementById('progress-bar').style.width = progress + '%';
+
+            // Load answers
+            playerButtons.forEach((btn, index) => {
+                btn.textContent = question.answers[index];
+                btn.disabled = false;
+                btn.style.border = '4px solid transparent';
+                btn.style.opacity = '1';
+            });
+
+            // Reset state
+            playerLastAnswer = null;
+            questionStartTime = new Date();
+            document.getElementById('next-question-player-btn').setAttribute('hidden', true);
+            playerStatusText.textContent = `Question ${qIndex + 1}`;
+            isProcessingAnswer = false; // CRITICAL: Reset flag
+
+            // Start question timer
+            startQuestionTimer(question.time || 30);
+        }
+
+        // START QUESTION TIMER
+        function startQuestionTimer(duration) {
+            let timeLeft = duration;
+            timerEl.textContent = timeLeft;
+
+            if (playerTimerInterval) clearInterval(playerTimerInterval);
+
+            playerTimerInterval = setInterval(() => {
+                timeLeft--;
+                timerEl.textContent = timeLeft;
+
+                if (timeLeft <= 0) {
+                    clearInterval(playerTimerInterval);
+                    timerEl.textContent = '0';
+
+                    // Auto-advance if no answer selected
+                    if (!playerLastAnswer && !isProcessingAnswer) {
+                        playerStatusText.textContent = 'Time\'s up! Moving to next question...';
+                        setTimeout(() => moveToNextQuestion(), 2000);
+                    }
+                }
+            }, 1000);
+        }
+
+        // OVERALL TIMER
+        function startOverallTimer(startTime, duration) {
+            const endTime = startTime.getTime() + duration * 1000;
+            const timerDisplay = document.getElementById('overall-timer');
+
+            overallTimerInterval = setInterval(() => {
+                const now = new Date().getTime();
+                const timeLeft = Math.floor((endTime - now) / 1000);
+
+                if (timeLeft <= 0) {
+                    clearInterval(overallTimerInterval);
+                    timerDisplay.textContent = 'Time: EXPIRED';
+                    completeAsyncQuiz();
+                } else {
+                    const minutes = Math.floor(timeLeft / 60);
+                    const seconds = timeLeft % 60;
+                    timerDisplay.textContent = `Time: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+                }
+            }, 1000);
+        }
+
+        // MOVE TO NEXT QUESTION - CRITICAL FIX
+        async function moveToNextQuestion() {
+            if (isProcessingAnswer) return; // Prevent multiple calls
+
+            isProcessingAnswer = true; // Set flag
+            const nextIndex = currentQuestionIndex + 1;
+
+            console.log('Moving to next question:', nextIndex); // Debug
+
+            // Update local state immediately
+            currentQuestionIndex = nextIndex;
+
+            // Check if quiz complete
+            if (nextIndex >= quizData.questions.length) {
+                await completeAsyncQuiz();
+                return;
+            }
+
+            try {
+                // Update Firebase
+                await updateDoc(doc(db, 'games', currentGameId, 'players', currentPlayerId), {
+                    currentQuestion: nextIndex
+                });
+
+                // Load next question immediately (don't wait for listener)
+                loadAsyncQuestion(nextIndex);
+
+            } catch (error) {
+                console.error('Error moving to next question:', error);
+                isProcessingAnswer = false;
+                showAlert('Error advancing. Please try again.');
+            }
+        }
+
+        // COMPLETE QUIZ
+        async function completeAsyncQuiz() {
+            if (playerTimerInterval) clearInterval(playerTimerInterval);
+            if (overallTimerInterval) clearInterval(overallTimerInterval);
+
+            try {
+                await updateDoc(doc(db, 'games', currentGameId, 'players', currentPlayerId), {
+                    status: 'completed',
+                    completedAt: serverTimestamp(),
+                    currentQuestion: quizData.questions.length
+                });
+
+                showCompletionScreen();
+            } catch (error) {
+                console.error('Error completing quiz:', error);
+            }
+        }
+
+        // COMPLETION SCREEN
+        function showCompletionScreen() {
+            playerButtons.forEach(btn => btn.disabled = true);
+            questionTextEl.textContent = '🎉 Quiz Complete!';
+            playerStatusText.textContent = 'Great job!';
+            timerEl.textContent = '✓';
+            document.getElementById('next-question-player-btn').setAttribute('hidden', true);
+
+            showAlert('You\'ve completed the quiz! Check the leaderboard.', false);
+        }
+
+        // NEXT QUESTION BUTTON
+        document.getElementById('next-question-player-btn').addEventListener('click', () => {
+            if (isProcessingAnswer) return;
+            moveToNextQuestion();
+        });
+
+        // SYNC MODE LISTENERS
+        function startPlayerListeners(gamePin, playerId) {
+
+            playerGameUnsub = onSnapshot(doc(db, 'games', gamePin), (doc) => {
+                const gameData = doc.data();
+                currentHostGameData = gameData;
+
+                if (playerTimerInterval) clearInterval(playerTimerInterval);
+
+                if (!gameData) {
+                    showAlert("The host has ended the game.", false);
+                    stopPlayerGame();
+                    return;
+                }
+
+                switch (gameData.state) {
+                    case 'lobby':
+                        playerStatusText.textContent = 'Waiting for host to start...';
+                        break;
+                    case 'question':
+                        playerLastAnswer = null;
+                        const questionData = gameData.currentQuestionData;
+
+                        if (questionData) {
+                            // Display question with image if present
+                            let questionHTML = '';
+                            if (questionData.imageUrl) {
+                                questionHTML = `<img src="${questionData.imageUrl}" class="max-w-full h-auto rounded-lg mb-3 mx-auto" style="max-height: 200px;" onerror="this.style.display='none'" alt="Question image"><br>`;
+                            }
+                            questionHTML += questionData.text;
+                            questionTextEl.innerHTML = questionHTML;
+
+                            playerButtons.forEach((btn, index) => {
+                                btn.textContent = questionData.answers[index];
+                                btn.disabled = false;
+                                btn.style.border = '4px solid transparent';
+                                btn.style.opacity = '1';
+                            });
+                        }
+
+                        playerStatusText.textContent = `Question ${gameData.currentQuestion + 1}`;
+                        startPlayerTimer(gameData.questionStartTime.toDate(), questionData.time || 30);
+                        break;
+
+                    case 'leaderboard':
+                        playerButtons.forEach(btn => btn.disabled = true);
+                        const currentQData = gameData.currentQuestionData;
+                        const correctIndex = parseInt(currentQData.correct, 10);
+
+                        playerButtons.forEach((btn, index) => {
+                            if (index === correctIndex) {
+                                btn.style.border = '4px solid #22c55e';
+                            } else {
+                                btn.style.opacity = '0.5';
+                            }
+                        });
+
+                        if (playerLastAnswer && playerLastAnswer.questionIndex === gameData.currentQuestion) {
+                            if (playerLastAnswer.answerIndex === correctIndex) {
+                                playerStatusText.textContent = 'CORRECT ANSWER!!';
+                            } else {
+                                playerStatusText.textContent = 'WRONG ANSWER!';
+                                if (playerLastAnswer.answerIndex < playerButtons.length) {
+                                    playerButtons[playerLastAnswer.answerIndex].style.border = '4px solid #ef4444';
+                                }
+                            }
+                        } else {
+                            playerStatusText.textContent = 'NO OPTION SELECTED';
+                        }
+                        timerEl.textContent = "0";
+                        break;
+
+                    case 'finished':
+                        playerStatusText.textContent = 'Game Over!';
+                        questionTextEl.textContent = 'Game Over! Check the final leaderboard.';
+                        playerButtons.forEach(btn => btn.disabled = true);
+                        stopPlayerGame();
+                        break;
+                }
+            });
+
+            playerScoreUnsub = onSnapshot(doc(db, 'games', gamePin, 'players', playerId), (doc) => {
+                // Handle player removal
+                if (!doc.exists()) {
+                    showAlert("You have been removed from the game.", false);
+                    stopPlayerGame();
+                    return;
+                }
+
+                const playerData = doc.data();
+                if (playerData) {
+                    document.getElementById('player-score').textContent = playerData.score;
+                }
+            });
+        }
+
+        function startPlayerTimer(startTime, duration) {
+            const endTime = startTime.getTime() + duration * 1000;
+
+            playerTimerInterval = setInterval(() => {
+                const now = new Date().getTime();
+                const timeLeft = Math.round((endTime - now) / 1000);
+
+                if (timeLeft <= 0) {
+                    timerEl.textContent = '0';
+                    clearInterval(playerTimerInterval);
+                    playerButtons.forEach(btn => btn.disabled = true);
+                    playerStatusText.textContent = 'Time\'s Up!';
+                } else {
+                    timerEl.textContent = timeLeft;
+                }
+            }, 250);
+        }
+
+        function stopPlayerGame() {
+            if (playerGameUnsub) playerGameUnsub();
+            if (playerScoreUnsub) playerScoreUnsub();
+            if (playerTimerInterval) clearInterval(playerTimerInterval);
+            if (overallTimerInterval) clearInterval(overallTimerInterval);
+
+            sessionStorage.removeItem('quizGamePin');
+            sessionStorage.removeItem('quizPlayerId');
+            sessionStorage.removeItem('quizPlayerName');
+
+            setTimeout(() => {
+                window.location.href = './player-join.html';
+            }, 5000);
+        }
+
+        // ANSWER BUTTON CLICK HANDLER
+        document.querySelectorAll('#view-player-active-game .player-btn').forEach((btn, index) => {
+            btn.addEventListener('click', async () => {
+                if (!currentGameId || !currentPlayerId) return;
+
+                // Disable all buttons immediately
+                document.querySelectorAll('#view-player-active-game .player-btn').forEach(b => b.disabled = true);
+                btn.style.border = '4px solid white';
+
+                if (gameMode === 'sync') {
+                    // SYNC MODE
+                    if (!currentHostGameData) {
+                        console.error("Game data is not available!");
+                        return;
+                    }
+
+                    playerLastAnswer = {
+                        questionIndex: currentHostGameData.currentQuestion,
+                        answerIndex: index
+                    };
+
+                    await updateDoc(doc(db, 'games', currentGameId, 'players', currentPlayerId), {
+                        lastAnswer: {
+                            questionIndex: currentHostGameData.currentQuestion,
+                            answerIndex: index,
+                            timestamp: serverTimestamp()
+                        }
+                    });
+
+                    playerStatusText.textContent = 'ANSWER LOCKED IN!';
+
+                } else {
+                    // ASYNC MODE - CRITICAL FIX
+                    if (isProcessingAnswer) {
+                        console.log('Already processing answer, ignoring click');
+                        return; // Prevent double submission
+                    }
+
+                    isProcessingAnswer = true; // Set flag immediately
+
+                    const timeSpent = Math.floor((new Date() - questionStartTime) / 1000);
+                    const question = quizData.questions[currentQuestionIndex];
+                    const correctIndex = parseInt(question.correct, 10);
+                    const isCorrect = index === correctIndex;
+
+                    // Calculate score
+                    let points = 0;
+                    if (isCorrect) {
+                        const maxTime = question.time || 30;
+                        const timeBonus = Math.max(0, maxTime - timeSpent);
+                        points = 500 + (timeBonus * 20);
+                    }
+
+                    // Store answer locally
+                    playerLastAnswer = {
+                        questionIndex: currentQuestionIndex,
+                        answerIndex: index,
+                        timeSpent: timeSpent,
+                        isCorrect: isCorrect
+                    };
+
+                    // Stop timer
+                    if (playerTimerInterval) clearInterval(playerTimerInterval);
+
+                    // Show feedback
+                    playerButtons.forEach((b, i) => {
+                        if (i === correctIndex) {
+                            b.style.border = '4px solid #22c55e';
+                        } else {
+                            b.style.opacity = '0.5';
+                        }
+                    });
+
+                    if (isCorrect) {
+                        playerStatusText.textContent = `CORRECT! +${points} points 🎉`;
+                    } else {
+                        playerStatusText.textContent = 'WRONG 😔';
+                        btn.style.border = '4px solid #ef4444';
+                    }
+
+                    try {
+                        // Get current player data
+                        const playerDoc = await getDoc(doc(db, 'games', currentGameId, 'players', currentPlayerId));
+                        const playerData = playerDoc.data();
+                        const currentAnswers = playerData.answers || [];
+
+                        // Update Firebase with answer and score
+                        await updateDoc(doc(db, 'games', currentGameId, 'players', currentPlayerId), {
+                            answers: [...currentAnswers, playerLastAnswer],
+                            score: playerData.score + points,
+                            lastAnswer: {
+                                questionIndex: currentQuestionIndex,
+                                answerIndex: index,
+                                timestamp: serverTimestamp()
+                            }
+                        });
+
+                        // Show next button
+                        document.getElementById('next-question-player-btn').removeAttribute('hidden');
+                        isProcessingAnswer = false;
+
+                    } catch (error) {
+                        console.error('Error submitting answer:', error);
+                        isProcessingAnswer = false;
+                        showAlert('Error submitting answer. Please try again.');
+                    }
+                }
+            });
+        });
+
+        function showAlert(message, isError = true) {
+            const alertBox = document.getElementById('alert-box');
+            alertBox.textContent = message;
+
+            if (isError) {
+                alertBox.classList.remove('bg-green-500');
+                alertBox.classList.add('bg-red-500');
+            } else {
+                alertBox.classList.remove('bg-red-500');
+                alertBox.classList.add('bg-green-500');
+            }
+
+            alertBox.removeAttribute('hidden');
+            setTimeout(() => {
+                alertBox.setAttribute('hidden', true);
+            }, 3000);
+        }
+    </script>
+</body>
+
+</html>

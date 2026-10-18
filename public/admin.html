@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background-color: #4f46e5;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #4338ca;
+        }
+
+        .btn-secondary {
+            background-color: #e5e7eb;
+            color: #374151;
+        }
+
+        .btn-secondary:hover {
+            background-color: #d1d5db;
+        }
+
+        .input {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+        }
+
+        .icon-btn {
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            transition: all 0.2s;
+        }
+
+        .icon-btn:hover {
+            background-color: #e5e7eb;
+        }
+
+        .mode-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .mode-sync {
+            background-color: #dbeafe;
+            color: #1e40af;
+        }
+
+        .mode-async {
+            background-color: #dcfce7;
+            color: #166534;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+</head>
+
+<body class="bg-gray-100 min-h-screen p-8">
+
+    <div id="view-admin-dashboard" class="max-w-4xl mx-auto" hidden>
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold">Admin Dashboard</h1>
+            <a href="./index.html" class="btn btn-secondary">Back to Menu</a>
+        </div>
+
+        <div class="card p-6 mb-8">
+            <h2 class="text-2xl font-bold mb-4">Import from CSV</h2>
+            <p class="text-gray-600 mb-4">
+                Import questions from a .csv file. The file must have 6 columns in this order:
+                <code
+                    class="text-sm bg-gray-200 p-1 rounded">Question,Answer A,Answer B,Answer C,Answer D,Correct Answer</code>
+            </p>
+            <label for="csv-file-input" class="btn btn-secondary cursor-pointer">
+                <svg class="mr-2" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                Upload .csv File
+            </label>
+            <input type="file" id="csv-file-input" accept=".csv" class="hidden">
+        </div>
+
+        <div class="card p-6 mb-8">
+            <form id="quiz-form">
+                <input type="hidden" id="quiz-id">
+                <h2 id="form-title" class="text-2xl font-bold mb-4">Create New Quiz</h2>
+
+                <div class="mb-4">
+                    <label for="quiz-title" class="block text-sm font-medium text-gray-700 mb-1">Quiz Title</label>
+                    <input type="text" id="quiz-title" class="input" required>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Quiz Mode</label>
+                    <div class="flex gap-4">
+                        <label class="flex items-center cursor-pointer">
+                            <input type="radio" name="quiz-mode" value="sync" class="mr-2" checked>
+                            <span class="font-medium">Synchronous</span>
+                            <span class="text-sm text-gray-500 ml-2">(Host controls pace)</span>
+                        </label>
+                        <label class="flex items-center cursor-pointer">
+                            <input type="radio" name="quiz-mode" value="async" class="mr-2">
+                            <span class="font-medium">Asynchronous</span>
+                            <span class="text-sm text-gray-500 ml-2">(Players self-paced)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div id="time-limit-container" class="mb-4" hidden>
+                    <label for="quiz-time-limit" class="block text-sm font-medium text-gray-700 mb-1">
+                        Total Time Limit (minutes, optional)
+                    </label>
+                    <input type="number" id="quiz-time-limit" class="input" min="1"
+                        placeholder="Leave empty for no time limit">
+                    <p class="text-xs text-gray-500 mt-1">Total time players have to complete all questions</p>
+                </div>
+
+                <div id="questions-container" class="space-y-4 mb-4"></div>
+
+                <div class="flex justify-between">
+                    <button type="button" id="add-question-btn" class="btn btn-secondary">
+                        <svg class="mr-2" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                            stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Add Question
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <svg class="mr-2" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                            stroke-linejoin="round">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                            <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                            <polyline points="7 3 7 8 15 8"></polyline>
+                        </svg>
+                        Save Quiz
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="card p-6">
+            <h2 class="text-2xl font-bold mb-4">My Quizzes</h2>
+            <div id="quiz-list" class="space-y-4">
+                <p id="quiz-list-loading" class="text-gray-500">Loading quizzes...</p>
+            </div>
+        </div>
+    </div>
+
+    <template id="question-template">
+        <div class="question-card p-4 border border-gray-200 rounded-lg">
+            <div class="flex justify-between items-center mb-2">
+                <label class="block text-sm font-medium text-gray-700">Question</label>
+                <button type="button" class="remove-question-btn icon-btn text-red-500" title="Remove Question">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                </button>
+            </div>
+            <input type="text" class="question-text input mb-2" placeholder="e.g., What is 2 + 2?" required>
+            <div class="grid grid-cols-2 gap-2 mb-2">
+                <input type="text" class="answer-input input" placeholder="Answer 1" required>
+                <input type="text" class="answer-input input" placeholder="Answer 2" required>
+                <input type="text" class="answer-input input" placeholder="Answer 3" required>
+                <input type="text" class="answer-input input" placeholder="Answer 4" required>
+            </div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Correct Answer</label>
+            <select class="correct-answer-select input !w-1/2">
+                <option value="0">Answer 1</option>
+                <option value="1">Answer 2</option>
+                <option value="2">Answer 3</option>
+                <option value="3">Answer 4</option>
+            </select>
+            <label class="block text-sm font-medium text-gray-700 mb-1 mt-2">Time (seconds)</label>
+            <input type="number" class="question-time input !w-1/2" value="30" min="5">
+
+            <!-- Image Upload Section -->
+            <div class="mt-3 pt-3 border-t border-gray-200">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Question Image (optional)</label>
+                <div class="image-preview-container mb-2" style="display: none;">
+                    <img class="image-preview max-w-full h-auto rounded border border-gray-300 mb-2"
+                        alt="Question image">
+                    <button type="button" class="remove-image-btn btn btn-secondary text-xs">Remove Image</button>
+                </div>
+                <input type="file" class="image-upload-input hidden"
+                    accept="image/jpeg,image/jpg,image/png,image/gif,image/webp">
+                <button type="button" class="upload-image-btn btn btn-secondary text-sm">
+                    <svg class="mr-1" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                        <polyline points="21 15 16 10 5 21"></polyline>
+                    </svg>
+                    Upload Image
+                </button>
+                <p class="text-xs text-gray-500 mt-1">Max 5MB. Formats: JPG, PNG, GIF, WebP</p>
+            </div>
+        </div>
+    </template>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, doc, collection, addDoc, onSnapshot, updateDoc, deleteDoc, setDoc, getDoc, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBcNOCX6svBS7ONFHXeR0gHx-SHNCzG2Mg",
+            authDomain: "quizzel0.firebaseapp.com",
+            projectId: "quizzel0",
+            storageBucket: "quizzel0.firebasestorage.app",
+            messagingSenderId: "568971743868",
+            appId: "1:568971743868:web:adfb64f8178a2dc9316ff9",
+            measurementId: "G-T098LL4GPC"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const storage = getStorage(app);
+
+        let currentUserId = null;
+        let quizUnsubscribe = null;
+
+        const dashboardView = document.getElementById('view-admin-dashboard');
+
+        onAuthStateChanged(auth, (user) => {
+            console.log("=== AUTH STATE CHANGED ===");
+            if (user) {
+                console.log("User authenticated:", user.uid);
+                console.log("User is anonymous:", user.isAnonymous);
+                currentUserId = user.uid;
+                dashboardView.removeAttribute('hidden');
+                loadQuizzes();
+            } else {
+                console.log("No user authenticated. Attempting anonymous sign-in...");
+                signInAnonymously(auth).then(() => {
+                    console.log("Anonymous sign-in successful");
+                }).catch(err => {
+                    console.error("=== ANONYMOUS SIGN-IN FAILED ===");
+                    console.error("Error code:", err.code);
+                    console.error("Error message:", err.message);
+                    console.error("Full error:", err);
+
+                    alert("Authentication failed: " + err.message + "\n\nCheck that Anonymous Authentication is enabled in Firebase Console.");
+                });
+            }
+        });
+
+        const quizForm = document.getElementById('quiz-form');
+        const questionsContainer = document.getElementById('questions-container');
+        const addQuestionBtn = document.getElementById('add-question-btn');
+        const quizList = document.getElementById('quiz-list');
+        let currentQuizQuestions = [];
+
+        // NEW: Toggle time limit visibility based on mode
+        document.querySelectorAll('input[name="quiz-mode"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                const timeLimitContainer = document.getElementById('time-limit-container');
+                if (e.target.value === 'async') {
+                    timeLimitContainer.removeAttribute('hidden');
+                } else {
+                    timeLimitContainer.setAttribute('hidden', true);
+                }
+            });
+        });
+
+        addQuestionBtn.addEventListener('click', () => {
+            const questionTemplate = document.getElementById('question-template');
+            const newQuestionNode = questionTemplate.content.cloneNode(true);
+            const questionId = Date.now();
+
+            const questionData = { id: questionId, answers: ["", "", "", ""], correct: 0, text: "", time: 30 };
+            currentQuizQuestions.push(questionData);
+
+            const questionCard = newQuestionNode.querySelector('.question-card');
+            questionCard.dataset.questionId = questionId;
+
+            newQuestionNode.querySelector('.remove-question-btn').addEventListener('click', () => {
+                currentQuizQuestions = currentQuizQuestions.filter(q => q.id !== questionId);
+                questionCard.remove();
+            });
+
+            // Image upload handling
+            const uploadBtn = newQuestionNode.querySelector('.upload-image-btn');
+            const imageInput = newQuestionNode.querySelector('.image-upload-input');
+            const previewContainer = newQuestionNode.querySelector('.image-preview-container');
+            const previewImg = newQuestionNode.querySelector('.image-preview');
+            const removeImageBtn = newQuestionNode.querySelector('.remove-image-btn');
+
+            uploadBtn.addEventListener('click', () => imageInput.click());
+
+            imageInput.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                // Validate file size
+                if (file.size > 5 * 1024 * 1024) {
+                    alert('Image must be less than 5MB');
+                    e.target.value = '';
+                    return;
+                }
+
+                // Validate file type
+                if (!file.type.startsWith('image/')) {
+                    alert('Please select an image file');
+                    e.target.value = '';
+                    return;
+                }
+
+                try {
+                    uploadBtn.textContent = 'Uploading...';
+                    uploadBtn.disabled = true;
+
+                    // Create unique filename
+                    const timestamp = Date.now();
+                    const extension = file.name.split('.').pop();
+                    const filename = `${questionId}_${timestamp}.${extension}`;
+                    const storageRef = ref(storage, `quiz-images/temp/${filename}`);
+
+                    // Upload file
+                    await uploadBytes(storageRef, file);
+                    const downloadURL = await getDownloadURL(storageRef);
+
+                    // Update question data
+                    const question = currentQuizQuestions.find(q => q.id === questionId);
+                    if (question) {
+                        question.imageUrl = downloadURL;
+                        question.imageStoragePath = `quiz-images/temp/${filename}`;
+                    }
+
+                    // Show preview
+                    previewImg.src = downloadURL;
+                    previewContainer.style.display = 'block';
+                    uploadBtn.style.display = 'none';
+
+                } catch (error) {
+                    console.error('Image upload error:', error);
+                    alert('Failed to upload image: ' + error.message);
+                } finally {
+                    uploadBtn.textContent = 'Upload Image';
+                    uploadBtn.disabled = false;
+                    e.target.value = '';
+                }
+            });
+
+            removeImageBtn.addEventListener('click', async () => {
+                const question = currentQuizQuestions.find(q => q.id === questionId);
+                if (question && question.imageUrl) {
+                    // Remove from storage if uploaded
+                    if (question.imageStoragePath) {
+                        try {
+                            await deleteObject(ref(storage, question.imageStoragePath));
+                        } catch (error) {
+                            console.error('Error deleting image:', error);
+                        }
+                    }
+                    delete question.imageUrl;
+                    delete question.imageStoragePath;
+                }
+                previewContainer.style.display = 'none';
+                uploadBtn.style.display = 'inline-flex';
+                previewImg.src = '';
+            });
+
+            questionsContainer.appendChild(newQuestionNode);
+        });
+
+        quizForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const quizId = document.getElementById('quiz-id').value;
+            const quizTitle = document.getElementById('quiz-title').value;
+            const quizMode = document.querySelector('input[name="quiz-mode"]:checked').value;
+            const timeLimit = document.getElementById('quiz-time-limit').value;
+
+            questionsContainer.querySelectorAll('.question-card').forEach(card => {
+                const questionId = Number(card.dataset.questionId);
+                const question = currentQuizQuestions.find(q => q.id === questionId);
+
+                if (question) {
+                    question.text = card.querySelector('.question-text').value;
+                    question.correct = parseInt(card.querySelector('.correct-answer-select').value, 10);
+                    question.time = parseInt(card.querySelector('.question-time').value, 10);
+                    card.querySelectorAll('.answer-input').forEach((input, index) => {
+                        question.answers[index] = input.value;
+                    });
+                }
+            });
+
+            if (!quizTitle || currentQuizQuestions.length === 0) {
+                alert("Please add a title and at least one question.");
+                return;
+            }
+
+            const quizData = {
+                title: quizTitle,
+                ownerId: currentUserId,
+                questions: currentQuizQuestions,
+                mode: quizMode, // NEW
+                createdAt: serverTimestamp()
+            };
+
+            // NEW: Add time limit if specified and async mode
+            if (quizMode === 'async' && timeLimit) {
+                quizData.timeLimit = parseInt(timeLimit, 10) * 60; // Convert to seconds
+            }
+
+            try {
+                console.log("=== ATTEMPTING TO SAVE QUIZ ===");
+                console.log("User ID:", currentUserId);
+                console.log("Quiz Data:", quizData);
+                console.log("Database instance:", db);
+
+                if (quizId) {
+                    console.log("Updating existing quiz:", quizId);
+                    await updateDoc(doc(db, 'quizzes', quizId), quizData);
+                    alert("Quiz updated!");
+                } else {
+                    console.log("Creating new quiz in collection 'quizzes'");
+                    const docRef = await addDoc(collection(db, 'quizzes'), quizData);
+                    console.log("Quiz saved successfully with ID:", docRef.id);
+                    alert("Quiz saved!");
+                }
+                resetForm();
+            } catch (error) {
+                console.error("=== ERROR SAVING QUIZ ===");
+                console.error("Error code:", error.code);
+                console.error("Error message:", error.message);
+                console.error("Full error:", error);
+
+                let errorMsg = "Could not save quiz.\n\n";
+                errorMsg += `Error: ${error.message}\n`;
+
+                if (error.code === 'permission-denied') {
+                    errorMsg += "\nThis is a PERMISSION error. Check your Firestore Security Rules.";
+                } else if (error.code === 'unavailable') {
+                    errorMsg += "\nFirebase is UNAVAILABLE. Check your internet connection.";
+                } else if (error.code === 'unauthenticated') {
+                    errorMsg += "\nYou are NOT AUTHENTICATED. Check Anonymous Auth is enabled.";
+                }
+
+                alert(errorMsg);
+            }
+        });
+
+        function resetForm() {
+            quizForm.reset();
+            questionsContainer.innerHTML = '';
+            currentQuizQuestions = [];
+            document.getElementById('quiz-id').value = '';
+            document.getElementById('form-title').textContent = 'Create New Quiz';
+            document.getElementById('time-limit-container').setAttribute('hidden', true);
+        }
+
+        function getCorrectIndexFromLetter(answerString, allAnswers) {
+            const firstChar = answerString.trim().toLowerCase().charAt(0);
+            if (firstChar === 'a') return 0;
+            if (firstChar === 'b') return 1;
+            if (firstChar === 'c') return 2;
+            if (firstChar === 'd') return 3;
+
+            const matchIndex = allAnswers.indexOf(answerString.trim());
+            if (matchIndex > -1) return matchIndex;
+
+            return 0;
+        }
+
+        // Helper function to setup image handlers for a question card
+        function setupImageHandlers(questionCard, questionData) {
+            const uploadBtn = questionCard.querySelector('.upload-image-btn');
+            const imageInput = questionCard.querySelector('.image-upload-input');
+            const previewContainer = questionCard.querySelector('.image-preview-container');
+            const previewImg = questionCard.querySelector('.image-preview');
+            const removeImageBtn = questionCard.querySelector('.remove-image-btn');
+
+            // Show existing image if present
+            if (questionData.imageUrl) {
+                previewImg.src = questionData.imageUrl;
+                previewContainer.style.display = 'block';
+                uploadBtn.style.display = 'none';
+            }
+
+            uploadBtn.addEventListener('click', () => imageInput.click());
+
+            imageInput.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                if (file.size > 5 * 1024 * 1024) {
+                    alert('Image must be less than 5MB');
+                    e.target.value = '';
+                    return;
+                }
+
+                if (!file.type.startsWith('image/')) {
+                    alert('Please select an image file');
+                    e.target.value = '';
+                    return;
+                }
+
+                try {
+                    uploadBtn.textContent = 'Uploading...';
+                    uploadBtn.disabled = true;
+
+                    const timestamp = Date.now();
+                    const extension = file.name.split('.').pop();
+                    const filename = `${questionData.id}_${timestamp}.${extension}`;
+                    const storageRef = ref(storage, `quiz-images/temp/${filename}`);
+
+                    await uploadBytes(storageRef, file);
+                    const downloadURL = await getDownloadURL(storageRef);
+
+                    questionData.imageUrl = downloadURL;
+                    questionData.imageStoragePath = `quiz-images/temp/${filename}`;
+
+                    previewImg.src = downloadURL;
+                    previewContainer.style.display = 'block';
+                    uploadBtn.style.display = 'none';
+
+                } catch (error) {
+                    console.error('Image upload error:', error);
+                    alert('Failed to upload image: ' + error.message);
+                } finally {
+                    uploadBtn.textContent = 'Upload Image';
+                    uploadBtn.disabled = false;
+                    e.target.value = '';
+                }
+            });
+
+            removeImageBtn.addEventListener('click', async () => {
+                if (questionData.imageUrl && questionData.imageStoragePath) {
+                    try {
+                        await deleteObject(ref(storage, questionData.imageStoragePath));
+                    } catch (error) {
+                        console.error('Error deleting image:', error);
+                    }
+                }
+                delete questionData.imageUrl;
+                delete questionData.imageStoragePath;
+                previewContainer.style.display = 'none';
+                uploadBtn.style.display = 'inline-flex';
+                previewImg.src = '';
+            });
+        }
+
+        function loadQuestionsIntoForm(questionsArray) {
+            questionsContainer.innerHTML = '';
+            currentQuizQuestions = questionsArray;
+
+            currentQuizQuestions.forEach(questionData => {
+                const questionTemplate = document.getElementById('question-template');
+                const newQuestionNode = questionTemplate.content.cloneNode(true);
+                const questionCard = newQuestionNode.querySelector('.question-card');
+
+                questionCard.dataset.questionId = questionData.id;
+                questionCard.querySelector('.question-text').value = questionData.text;
+                questionCard.querySelector('.correct-answer-select').value = questionData.correct;
+                questionCard.querySelector('.question-time').value = questionData.time || 30;
+
+                questionCard.querySelectorAll('.answer-input').forEach((input, index) => {
+                    input.value = questionData.answers[index];
+                });
+
+                newQuestionNode.querySelector('.remove-question-btn').addEventListener('click', () => {
+                    currentQuizQuestions = currentQuizQuestions.filter(q => q.id !== questionData.id);
+                    questionCard.remove();
+                });
+
+                setupImageHandlers(questionCard, questionData);
+
+                questionsContainer.appendChild(newQuestionNode);
+            });
+
+            alert(`Successfully imported ${currentQuizQuestions.length} questions! You can add more manually or click "Save Quiz".`);
+        }
+
+        function loadQuizzes() {
+            if (quizUnsubscribe) quizUnsubscribe();
+
+            const q = query(collection(db, 'quizzes'), where("ownerId", "==", currentUserId));
+
+            quizUnsubscribe = onSnapshot(q, (snapshot) => {
+                if (snapshot.empty) {
+                    quizList.innerHTML = '<p class="text-gray-500">You have not created any quizzes yet.</p>';
+                    return;
+                }
+
+                quizList.innerHTML = '';
+                snapshot.forEach(doc => {
+                    const quiz = doc.data();
+                    const quizId = doc.id;
+                    const mode = quiz.mode || 'sync'; // Default to sync for old quizzes
+                    const modeBadge = mode === 'async'
+                        ? '<span class="mode-badge mode-async">ASYNC</span>'
+                        : '<span class="mode-badge mode-sync">SYNC</span>';
+
+                    const quizEl = document.createElement('div');
+                    quizEl.className = 'flex justify-between items-center p-4 border border-gray-200 rounded-lg';
+                    quizEl.innerHTML = `
+                        <div>
+                            <div class="flex items-center gap-2 mb-1">
+                                <h3 class="text-lg font-bold">${quiz.title}</h3>
+                                ${modeBadge}
+                            </div>
+                            <p class="text-sm text-gray-500">${quiz.questions.length} questions</p>
+                        </div>
+                        <div class="space-x-2">
+                            <button data-id="${quizId}" data-action="start" class="btn btn-primary" title="Start Game">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                            </button>
+                            <button data-id="${quizId}" data-action="edit" class="btn btn-secondary" title="Edit Quiz">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                            </button>
+                            <button data-id="${quizId}" data-action="delete" class="btn btn-secondary !text-red-500" title="Delete Quiz">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                            </button>
+                        </div>
+                    `;
+                    quizList.appendChild(quizEl);
+                });
+            }, (error) => {
+                console.error("Error loading quizzes: ", error);
+                quizList.innerHTML = '<p class="text-red-500">Could not load quizzes.</p>';
+            });
+        }
+
+        quizList.addEventListener('click', async (e) => {
+            const button = e.target.closest('button');
+            if (!button) return;
+
+            const quizId = button.dataset.id;
+            const action = button.dataset.action;
+
+            if (action === 'delete') {
+                if (confirm('Are you sure you want to delete this quiz?')) {
+                    try {
+                        await deleteDoc(doc(db, 'quizzes', quizId));
+                        alert('Quiz deleted.');
+                    } catch (error) {
+                        console.error("Error deleting quiz: ", error);
+                    }
+                }
+            }
+
+            if (action === 'edit') {
+                const docSnap = await getDoc(doc(db, 'quizzes', quizId));
+                if (docSnap.exists()) {
+                    const quiz = docSnap.data();
+                    document.getElementById('form-title').textContent = `Edit: ${quiz.title}`;
+                    document.getElementById('quiz-id').value = quizId;
+                    document.getElementById('quiz-title').value = quiz.title;
+
+                    // NEW: Set mode
+                    const mode = quiz.mode || 'sync';
+                    document.querySelector(`input[name="quiz-mode"][value="${mode}"]`).checked = true;
+
+                    // NEW: Set time limit if exists
+                    if (mode === 'async' && quiz.timeLimit) {
+                        document.getElementById('time-limit-container').removeAttribute('hidden');
+                        document.getElementById('quiz-time-limit').value = Math.floor(quiz.timeLimit / 60);
+                    }
+
+                    questionsContainer.innerHTML = '';
+                    currentQuizQuestions = quiz.questions.map(q => ({ ...q, id: q.id || Date.now() + Math.random() }));
+
+                    currentQuizQuestions.forEach(questionData => {
+                        const questionTemplate = document.getElementById('question-template');
+                        const newQuestionNode = questionTemplate.content.cloneNode(true);
+                        const questionCard = newQuestionNode.querySelector('.question-card');
+
+                        questionCard.dataset.questionId = questionData.id;
+                        questionCard.querySelector('.question-text').value = questionData.text;
+                        questionCard.querySelector('.correct-answer-select').value = questionData.correct;
+                        questionCard.querySelector('.question-time').value = questionData.time || 30;
+                        questionCard.querySelectorAll('.answer-input').forEach((input, index) => {
+                            input.value = questionData.answers[index];
+                        });
+
+                        newQuestionNode.querySelector('.remove-question-btn').addEventListener('click', () => {
+                            currentQuizQuestions = currentQuizQuestions.filter(q => q.id !== questionData.id);
+                            questionCard.remove();
+                        });
+
+                        setupImageHandlers(questionCard, questionData);
+
+                        questionsContainer.appendChild(newQuestionNode);
+                    });
+
+                    window.scrollTo(0, 0);
+                }
+            }
+
+            if (action === 'start') {
+                const gamePin = Math.floor(100000 + Math.random() * 900000).toString();
+
+                // NEW: Get quiz data to check mode
+                const quizSnap = await getDoc(doc(db, 'quizzes', quizId));
+                if (!quizSnap.exists()) {
+                    alert('Quiz not found.');
+                    return;
+                }
+
+                const quizData = quizSnap.data();
+                const mode = quizData.mode || 'sync';
+
+                try {
+                    const gameData = {
+                        quizId: quizId,
+                        ownerId: currentUserId,
+                        mode: mode, // NEW
+                        createdAt: serverTimestamp()
+                    };
+
+                    // Mode-specific fields
+                    if (mode === 'sync') {
+                        gameData.state = 'lobby';
+                        gameData.currentQuestion = -1;
+                    } else {
+                        // Async mode:
+                        gameData.state = 'lobby'; // <--- THIS IS THE FIX
+                        if (quizData.timeLimit) {
+                            gameData.timeLimit = quizData.timeLimit;
+                            // Do NOT set startTime here, set it when host clicks "Start Game"
+                        }
+                    }
+
+                    await setDoc(doc(db, 'games', gamePin), gameData);
+
+                    window.location.href = `./host.html?pin=${gamePin}&v=${Date.now()}`;
+
+                } catch (error) {
+                    console.error("Error starting game: ", error);
+                    alert("Could not start game session.");
+                }
+            }
+        });
+
+        document.getElementById('csv-file-input').addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            Papa.parse(file, {
+                complete: (results) => {
+                    try {
+                        const questions = results.data
+                            .slice(1)
+                            .map(row => {
+                                if (row.length < 6 || !row[0]) {
+                                    return null;
+                                }
+
+                                const questionText = row[0].trim();
+                                const answers = [
+                                    row[1].trim(),
+                                    row[2].trim(),
+                                    row[3].trim(),
+                                    row[4].trim()
+                                ];
+                                const correctString = row[5].trim();
+
+                                const correctIndex = getCorrectIndexFromLetter(correctString, answers);
+
+                                return {
+                                    id: Date.now() + Math.random(),
+                                    text: questionText,
+                                    answers: answers,
+                                    correct: correctIndex,
+                                    time: 30
+                                };
+                            })
+                            .filter(q => q !== null);
+
+                        if (questions.length === 0) {
+                            alert("Could not find any valid questions in that file.");
+                            return;
+                        }
+
+                        loadQuestionsIntoForm(questions);
+
+                    } catch (error) {
+                        console.error("Error parsing file:", error);
+                        alert("There was an error reading that file. Make sure it's a valid 6-column CSV.");
+                    }
+                },
+                error: (err) => {
+                    console.error("PapaParse error:", err);
+                    alert("Could not parse the CSV file.");
+                }
+            });
+
+            event.target.value = null;
+        });
+
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waiting for Host...</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100">
+
+    <div id="view-player-wait" class="flex items-center justify-center bg-gray-900 text-white p-8 min-h-screen">
+        <div class="text-center">
+            <h1 class="text-4xl font-bold mb-4">You're in!</h1>
+            <p class="text-2xl text-gray-300 mb-8">Waiting for the host to start the game...</p>
+            <div class="loader text-5xl">👀</div>
+            <p id="player-wait-name" class="text-3xl font-bold mt-8"></p>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBcNOCX6svBS7ONFHXeR0gHx-SHNCzG2Mg",
+            authDomain: "quizzel0.firebaseapp.com",
+            projectId: "quizzel0",
+            storageBucket: "quizzel0.firebasestorage.app",
+            messagingSenderId: "568971743868",
+            appId: "1:568971743868:web:adfb64f8178a2dc9316ff9",
+            measurementId: "G-T098LL4GPC"
+        };
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let playerGameUnsub = null;
+
+        window.addEventListener('load', () => {
+            const gamePin = sessionStorage.getItem('quizGamePin');
+            const playerName = sessionStorage.getItem('quizPlayerName');
+
+            if (!gamePin || !playerName) {
+                alert('No game session found. Redirecting to join page.');
+                window.location.href = './player-join.html';
+                return;
+            }
+
+            document.getElementById('player-wait-name').textContent = playerName;
+
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    startLobbyListener(gamePin);
+                } else {
+                    signInAnonymously(auth).catch(err => console.error(err));
+                }
+            });
+        });
+
+        function startLobbyListener(gamePin) {
+            playerGameUnsub = onSnapshot(doc(db, 'games', gamePin), (doc) => {
+                const gameData = doc.data();
+
+                if (!gameData) {
+                    if (playerGameUnsub) playerGameUnsub();
+                    alert('The host has ended the game.');
+                    sessionStorage.clear();
+                    window.location.href = './player-join.html';
+                    return;
+                }
+
+                const gameMode = gameData.mode || 'sync';
+
+                // FIXED: Handle state transitions for both modes
+                if (gameMode === 'sync') {
+                    // Sync mode: wait for 'question' state
+                    if (gameData.state === 'question') {
+                        if (playerGameUnsub) playerGameUnsub();
+                        window.location.href = './player-game.html';
+                    }
+                } else {
+                    // Async mode: wait for 'active' state
+                    if (gameData.state === 'active') {
+                        if (playerGameUnsub) playerGameUnsub();
+                        window.location.href = './player-game.html';
+                    }
+                }
+
+                // Both modes: check if game finished before starting
+                if (gameData.state === 'finished') {
+                    if (playerGameUnsub) playerGameUnsub();
+                    alert('This game has already finished.');
+                    sessionStorage.clear();
+                    window.location.href = './player-join.html';
+                }
+            });
+        }
+    </script>
+</body>
+
+</html>

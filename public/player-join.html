@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Join Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            padding: 1.5rem;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1.25rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background-color: #4f46e5;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #4338ca;
+        }
+
+        .btn-secondary {
+            background-color: #e5e7eb;
+            color: #374151;
+        }
+
+        .btn-secondary:hover {
+            background-color: #d1d5db;
+        }
+
+        .input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100">
+
+    <div id="alert-box" class="fixed top-5 left-1/2 -translate-x-1/2 p-4 rounded-lg text-white font-bold" hidden>
+        This is an alert
+    </div>
+
+    <div id="view-player-join" class="flex items-center justify-center bg-blue-600 min-h-screen">
+        <div class="card w-full max-w-sm">
+            <h2 class="text-3xl font-bold text-center mb-6">Join Game</h2>
+            <form id="player-join-form">
+                <div class="mb-4">
+                    <input type="text" id="player-pin" class="input text-center text-3xl font-bold tracking-widest"
+                        placeholder="GAME PIN" required>
+                </div>
+                <div class="mb-4">
+                    <input type="text" id="player-name" class="input text-center" placeholder="Your Name" required>
+                </div>
+                <div class="mb-4">
+                    <input type="email" id="player-email" class="input text-center" placeholder="Email" required>
+                </div>
+                <div class="mb-4">
+                    <input type="tel" id="player-contact" class="input text-center" placeholder="Contact Number"
+                        required>
+                </div>
+                <div class="mb-4">
+                    <input type="text" id="player-school" class="input text-center" placeholder="School Name" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-full text-lg">
+                    Enter Game
+                </button>
+            </form>
+            <a href="./index.html" class="btn btn-secondary w-full mt-4">
+                Back
+            </a>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, doc, getDoc, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBcNOCX6svBS7ONFHXeR0gHx-SHNCzG2Mg",
+            authDomain: "quizzel0.firebaseapp.com",
+            projectId: "quizzel0",
+            storageBucket: "quizzel0.firebasestorage.app",
+            messagingSenderId: "568971743868",
+            appId: "1:568971743868:web:adfb64f8178a2dc9316ff9",
+            measurementId: "G-T098LL4GPC"
+        };
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let authReady = false;
+
+        onAuthStateChanged(auth, (user) => {
+            if (!user) {
+                signInAnonymously(auth)
+                    .then(() => {
+                        console.log("Anonymous sign-in successful");
+                        authReady = true;
+                    })
+                    .catch(err => {
+                        console.error("Player sign-in failed", err);
+                        console.error("Error code:", err.code);
+                        console.error("Error message:", err.message);
+                        showAlert("Could not connect to game services. Check that Anonymous Authentication is enabled in Firebase Console.");
+                    });
+            } else {
+                console.log("User authenticated:", user.uid);
+                authReady = true;
+            }
+        });
+
+        document.getElementById('player-join-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const pin = document.getElementById('player-pin').value.trim();
+            const name = document.getElementById('player-name').value.trim();
+
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            const originalBtnText = submitBtn.innerText; // Use innerText to preserve formatting if any, though textContent is fine too. innerText is safer for "Enter Game"
+
+            // Disable button
+            submitBtn.disabled = true;
+            submitBtn.innerText = "Joining...";
+            submitBtn.classList.add('opacity-75', 'cursor-not-allowed');
+
+            const resetButton = () => {
+                submitBtn.disabled = false;
+                submitBtn.innerText = originalBtnText;
+                submitBtn.classList.remove('opacity-75', 'cursor-not-allowed');
+            };
+
+            // Wait for auth to complete
+            if (!auth.currentUser) {
+                showAlert("Connecting... Please wait a moment and try again.");
+
+                // Retry after 1 second
+                setTimeout(async () => {
+                    if (auth.currentUser) {
+                        await joinGame(pin, name, resetButton);
+                    } else {
+                        showAlert("Authentication failed. Please refresh the page or check your internet connection.");
+                        resetButton();
+                    }
+                }, 1000);
+                return;
+            }
+
+            await joinGame(pin, name, resetButton);
+        });
+
+        async function joinGame(pin, name, resetButton) {
+            try {
+                console.log("=== JOIN GAME DEBUG ===");
+                console.log("PIN entered:", pin);
+                console.log("PIN type:", typeof pin);
+                console.log("PIN length:", pin.length);
+                console.log("User ID:", auth.currentUser.uid);
+
+                const gameRef = doc(db, 'games', pin);
+                console.log("Document path:", gameRef.path);
+                console.log("Attempting getDoc...");
+
+                const gameSnap = await getDoc(gameRef);
+
+                console.log("getDoc completed");
+                console.log("Game exists:", gameSnap.exists());
+                console.log("Game snap:", gameSnap);
+
+                if (gameSnap.exists()) {
+                    console.log("Game data:", gameSnap.data());
+                } else {
+                    console.log("Document does not exist at path:", gameRef.path);
+                }
+
+                if (!gameSnap.exists()) {
+                    showAlert('Game not found. Please check the PIN.');
+                    if (resetButton) resetButton();
+                    return;
+                }
+
+                const gameData = gameSnap.data();
+                const gameMode = gameData.mode || 'sync';
+
+                // Check if game is finished (applies to both modes)
+                if (gameData.state === 'finished') {
+                    showAlert('This game has already finished.');
+                    if (resetButton) resetButton();
+                    return;
+                }
+
+                // Capture contact information fields (all required now)
+                const email = document.getElementById('player-email').value.trim();
+                const contact = document.getElementById('player-contact').value.trim();
+                const school = document.getElementById('player-school').value.trim();
+
+                // Email validation (required field)
+                if (!email.includes('@')) {
+                    showAlert('Please enter a valid email address.');
+                    if (resetButton) resetButton();
+                    return;
+                }
+
+                // Add player to Firebase
+                const playerData = {
+                    name: name,
+                    email: email,
+                    contact: contact,
+                    school: school,
+                    score: 0,
+                    authId: auth.currentUser.uid
+                };
+
+                // Add async-specific fields if in async mode
+                if (gameMode === 'async') {
+                    playerData.currentQuestion = 0;
+                    playerData.status = 'active';
+                    playerData.answers = [];
+                }
+
+                const playerRef = await addDoc(collection(db, 'games', pin, 'players'), playerData);
+
+                showAlert(`Success! You've joined as '${name}'`, false);
+
+                // Save details to session
+                sessionStorage.setItem('quizGamePin', pin);
+                sessionStorage.setItem('quizPlayerId', playerRef.id);
+                sessionStorage.setItem('quizPlayerName', name);
+
+                // Redirect based on game state
+                setTimeout(() => {
+                    // If game is already active (not in lobby), go directly to game
+                    if (gameData.state !== 'lobby') {
+                        window.location.href = './player-game.html';
+                    } else {
+                        // Game still in lobby - go to wait page
+                        window.location.href = './player-wait.html';
+                    }
+                }, 1500);
+
+            } catch (error) {
+                console.error("=== ERROR JOINING GAME ===");
+                console.error("Error code:", error.code);
+                console.error("Error message:", error.message);
+                console.error("Full error:", error);
+
+                let errorMsg = "Could not join game.";
+
+                if (error.code === 'permission-denied') {
+                    errorMsg = "Permission denied. Check that Anonymous Authentication is enabled in Firebase Console.";
+                } else if (error.code === 'unavailable') {
+                    errorMsg = "Firebase is unavailable. Check your internet connection.";
+                } else if (error.message) {
+                    errorMsg = error.message;
+                }
+
+                showAlert(errorMsg);
+                if (resetButton) resetButton();
+            }
+        }
+
+        function showAlert(message, isError = true) {
+            const alertBox = document.getElementById('alert-box');
+            alertBox.textContent = message;
+
+            if (isError) {
+                alertBox.classList.remove('bg-green-500');
+                alertBox.classList.add('bg-red-500');
+            } else {
+                alertBox.classList.remove('bg-red-500');
+                alertBox.classList.add('bg-green-500');
+            }
+
+            alertBox.removeAttribute('hidden');
+            setTimeout(() => {
+                alertBox.setAttribute('hidden', true);
+            }, 3000);
+        }
+    </script>
+</body>
+
+</html>

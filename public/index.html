@@ -1,0 +1,87 @@
+<!-- 
+      Has the media upload and all the features
+    -->
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quizzel - Welcome</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1.25rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+            text-align: center;
+        }
+
+        .btn-primary {
+            background-color: #4f46e5;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #4338ca;
+        }
+
+        .btn-secondary {
+            background-color: #e5e7eb;
+            color: #374151;
+        }
+
+        .btn-secondary:hover {
+            background-color: #d1d5db;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-200">
+
+    <div class="flex items-center justify-center min-h-screen">
+        <div class="card w-full max-w-sm text-center">
+            <h1 class="text-3xl font-bold text-center mb-8">Welcome to the Quizzel!</h1>
+
+            <p class="text-gray-600 mb-6">Are you an Admin or a Player?</p>
+
+            <a href="./admin.html" class="btn btn-primary text-lg">
+                I am an Admin
+            </a>
+
+            <a href="./player-join.html" class="btn btn-secondary text-lg mt-4">
+                I am a Player
+            </a>
+        </div>
+    </div>
+
+    <!-- 
+      This page is just a "traffic cop". It directs users to the correct page.
+      All the real logic is in admin.html, player.html, and host.html.
+      You still need to run this from a "Live Server".
+    -->
+
+</body>
+
+</html>
